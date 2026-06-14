@@ -7,6 +7,7 @@
   body { font-family: Arial; padding: 20px; }
   .question { margin-bottom: 15px; }
   .counter { margin-bottom: 20px; font-weight: bold; }
+  button { padding: 10px 20px; font-size: 16px; }
 </style>
 </head>
 <body>
@@ -23,6 +24,9 @@
 const TOTAL_QUESTIONS = 100;
 const OPTIONS = [1,2,3,4,5];
 const MAX_PER_OPTION = 25;
+
+// 👉 여기에 Apps Script URL 넣으세요
+const API_URL = "https://script.google.com/macros/s/AKfycbzvSZ_8NJJz9XO3lhgfrWcQwO9bZPZ_xf6lhlsGaPXKyxifhpyOImU0VnyiJfkKZ4TF/exec";
 
 const counts = {1:0,2:0,3:0,4:0,5:0};
 
@@ -41,7 +45,7 @@ for (let i = 1; i <= TOTAL_QUESTIONS; i++) {
   form.appendChild(div);
 }
 
-// ✅ 카운터 UI
+// ✅ 카운터 표시
 function updateCounter() {
   document.getElementById("counter").innerText =
     OPTIONS.map(o => `${o}번: ${counts[o]}/${MAX_PER_OPTION}`).join(" | ");
@@ -56,7 +60,7 @@ document.addEventListener("change", function(e) {
 
   // 이전 선택 찾기
   const prev = document.querySelector(`input[name="${name}"][data-selected="true"]`);
-  
+
   if (prev) {
     counts[prev.value]--;
     prev.removeAttribute("data-selected");
@@ -75,18 +79,28 @@ document.addEventListener("change", function(e) {
   updateCounter();
 });
 
-// ✅ 제출 검증
-function submitForm() {
-  // 모든 문항 체크 여부
+// ✅ 제출 함수 (Apps Script 연동)
+async function submitForm() {
+
+  // ✅ 중복 제출 방지
+  if (localStorage.getItem("submitted")) {
+    alert("이미 참여했습니다.");
+    return;
+  }
+
+  const answers = [];
+
+  // ✅ 전체 문항 체크
   for (let i = 1; i <= TOTAL_QUESTIONS; i++) {
     const checked = document.querySelector(`input[name="q${i}"]:checked`);
     if (!checked) {
       alert(`${i}번 문항을 선택하세요`);
       return;
     }
+    answers.push(checked.value);
   }
 
-  // 제한 재검증
+  // ✅ 제한 재검증
   for (let key in counts) {
     if (counts[key] > MAX_PER_OPTION) {
       alert("제한을 초과한 선택지가 있습니다.");
@@ -94,11 +108,32 @@ function submitForm() {
     }
   }
 
-  alert("제출 완료!");
-  console.log("결과:", counts);
+  // ✅ 버튼 비활성화
+  document.querySelector("button").disabled = true;
+
+  try {
+    const res = await fetch(API_URL, {
+      method: "POST",
+      body: JSON.stringify({ answers }),
+    });
+
+    const data = await res.json();
+
+    if (data.success) {
+      localStorage.setItem("submitted", "true");
+      document.body.innerHTML = "<h2>✅ 설문이 완료되었습니다. 감사합니다.</h2>";
+    } else {
+      alert("저장 실패");
+      document.querySelector("button").disabled = false;
+    }
+
+  } catch (err) {
+    alert("서버 오류");
+    document.querySelector("button").disabled = false;
+  }
 }
 
-// 초기 표시
+// 초기 카운터
 updateCounter();
 </script>
 
