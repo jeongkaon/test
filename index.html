@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<title>설문조사</title>
+<style>
+  body { font-family: Arial; padding: 20px; }
+  .question { margin-bottom: 15px; }
+  .counter { margin-bottom: 20px; font-weight: bold; }
+</style>
+</head>
+<body>
+
+<h2>설문조사 (각 선택지 최대 25개)</h2>
+
+<div class="counter" id="counter"></div>
+
+<form id="surveyForm"></form>
+
+<button onclick="submitForm()">제출</button>
+
+<script>
+const TOTAL_QUESTIONS = 100;
+const OPTIONS = [1,2,3,4,5];
+const MAX_PER_OPTION = 25;
+
+const counts = {1:0,2:0,3:0,4:0,5:0};
+
+// ✅ 문항 생성
+const form = document.getElementById("surveyForm");
+
+for (let i = 1; i <= TOTAL_QUESTIONS; i++) {
+  const div = document.createElement("div");
+  div.className = "question";
+  div.innerHTML = `<p>${i}번 문항</p>` + OPTIONS.map(opt => `
+    <label>
+      <input type="radio" name="q${i}" value="${opt}">
+      ${opt}
+    </label>
+  `).join(" ");
+  form.appendChild(div);
+}
+
+// ✅ 카운터 UI
+function updateCounter() {
+  document.getElementById("counter").innerText =
+    OPTIONS.map(o => `${o}번: ${counts[o]}/${MAX_PER_OPTION}`).join(" | ");
+}
+
+// ✅ 선택 이벤트
+document.addEventListener("change", function(e) {
+  if (e.target.type !== "radio") return;
+
+  const name = e.target.name;
+  const selected = e.target.value;
+
+  // 이전 선택 찾기
+  const prev = document.querySelector(`input[name="${name}"][data-selected="true"]`);
+  
+  if (prev) {
+    counts[prev.value]--;
+    prev.removeAttribute("data-selected");
+  }
+
+  // 제한 체크
+  if (counts[selected] >= MAX_PER_OPTION) {
+    alert("이 선택지는 25개를 초과할 수 없습니다.");
+    e.target.checked = false;
+    return;
+  }
+
+  counts[selected]++;
+  e.target.setAttribute("data-selected", "true");
+
+  updateCounter();
+});
+
+// ✅ 제출 검증
+function submitForm() {
+  // 모든 문항 체크 여부
+  for (let i = 1; i <= TOTAL_QUESTIONS; i++) {
+    const checked = document.querySelector(`input[name="q${i}"]:checked`);
+    if (!checked) {
+      alert(`${i}번 문항을 선택하세요`);
+      return;
+    }
+  }
+
+  // 제한 재검증
+  for (let key in counts) {
+    if (counts[key] > MAX_PER_OPTION) {
+      alert("제한을 초과한 선택지가 있습니다.");
+      return;
+    }
+  }
+
+  alert("제출 완료!");
+  console.log("결과:", counts);
+}
+
+// 초기 표시
+updateCounter();
+</script>
+
+</body>
+</html>
