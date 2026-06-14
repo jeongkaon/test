@@ -7,6 +7,7 @@
   body { font-family: Arial; padding: 20px; }
   .question { margin-bottom: 15px; }
   .counter { margin-bottom: 20px; font-weight: bold; }
+  input { margin-right: 10px; }
   button { padding: 10px 20px; font-size: 16px; }
 </style>
 </head>
@@ -14,35 +15,54 @@
 
 <h2>설문조사 (각 선택지 최대 25개)</h2>
 
+<!-- ✅ 이름 / 학번 -->
+<div style="margin-bottom:20px;">
+  이름: <input type="text" id="username">
+  학번: <input type="text" id="studentId">
+</div>
+
+<!-- ✅ 카운터 -->
 <div class="counter" id="counter"></div>
 
+<!-- ✅ 설문 -->
 <form id="surveyForm"></form>
 
 <button onclick="submitForm()">제출</button>
 
 <script>
-const TOTAL_QUESTIONS = 100;
 const OPTIONS = [1,2,3,4,5];
 const MAX_PER_OPTION = 25;
 
-// 👉 여기에 Apps Script URL 넣으세요
-const API_URL = "https://script.google.com/macros/s/AKfycbzvSZ_8NJJz9XO3lhgfrWcQwO9bZPZ_xf6lhlsGaPXKyxifhpyOImU0VnyiJfkKZ4TF/exec";
+let TOTAL_QUESTIONS = 0;
 
 const counts = {1:0,2:0,3:0,4:0,5:0};
 
-// ✅ 문항 생성
-const form = document.getElementById("surveyForm");
+// ✅ 질문 불러오기
+async function loadQuestions() {
+  const res = await fetch("questions.txt");
+  const text = await res.text();
 
-for (let i = 1; i <= TOTAL_QUESTIONS; i++) {
-  const div = document.createElement("div");
-  div.className = "question";
-  div.innerHTML = `<p>${i}번 문항</p>` + OPTIONS.map(opt => `
-    <label>
-      <input type="radio" name="q${i}" value="${opt}">
-      ${opt}
-    </label>
-  `).join(" ");
-  form.appendChild(div);
+  const questions = text.split("\n").filter(q => q.trim() !== "");
+  TOTAL_QUESTIONS = questions.length;
+
+  const form = document.getElementById("surveyForm");
+
+  questions.forEach((q, i) => {
+    const div = document.createElement("div");
+    div.className = "question";
+
+    div.innerHTML = `
+      <p>${i+1}. ${q}</p>
+      ${OPTIONS.map(opt => `
+        <label>
+          <input type="radio" name="q${i+1}" value="${opt}">
+          ${opt}
+        </label>
+      `).join(" ")}
+    `;
+
+    form.appendChild(div);
+  });
 }
 
 // ✅ 카운터 표시
@@ -58,7 +78,6 @@ document.addEventListener("change", function(e) {
   const name = e.target.name;
   const selected = e.target.value;
 
-  // 이전 선택 찾기
   const prev = document.querySelector(`input[name="${name}"][data-selected="true"]`);
 
   if (prev) {
@@ -66,7 +85,6 @@ document.addEventListener("change", function(e) {
     prev.removeAttribute("data-selected");
   }
 
-  // 제한 체크
   if (counts[selected] >= MAX_PER_OPTION) {
     alert("이 선택지는 25개를 초과할 수 없습니다.");
     e.target.checked = false;
@@ -79,18 +97,48 @@ document.addEventListener("change", function(e) {
   updateCounter();
 });
 
-// ✅ 제출 함수 (Apps Script 연동)
-async function submitForm() {
+// ✅ CSV 다운로드
+function downloadCSV(answers, name, studentId) {
+  const header = ["name", "studentId", "timestamp"];
+  for (let i = 1; i <= answers.length; i++) {
+    header.push("q" + i);
+  }
 
-  // ✅ 중복 제출 방지
-  if (localStorage.getItem("submitted")) {
-    alert("이미 참여했습니다.");
+  const row = [name, studentId, new Date().toISOString(), ...answers];
+
+  const csvContent = [
+    header.join(","),
+    row.join(",")
+  ].join("\n");
+
+  const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+
+  const safeName = name.replace(/[^\w가-힣]/g, "");
+  const safeId = studentId.replace(/[^\w]/g, "");
+
+  a.href = url;
+  a.download = `${safeName}_${safeId}.csv`;
+  a.click();
+
+  URL.revokeObjectURL(url);
+}
+
+// ✅ 제출
+function submitForm() {
+
+  const name = document.getElementById("username").value.trim();
+  const studentId = document.getElementById("studentId").value.trim();
+
+  if (!name || !studentId) {
+    alert("이름과 학번을 입력하세요");
     return;
   }
 
   const answers = [];
 
-  // ✅ 전체 문항 체크
   for (let i = 1; i <= TOTAL_QUESTIONS; i++) {
     const checked = document.querySelector(`input[name="q${i}"]:checked`);
     if (!checked) {
@@ -100,41 +148,21 @@ async function submitForm() {
     answers.push(checked.value);
   }
 
-  // ✅ 제한 재검증
   for (let key in counts) {
     if (counts[key] > MAX_PER_OPTION) {
-      alert("제한을 초과한 선택지가 있습니다.");
+      alert("제한 초과");
       return;
     }
   }
 
-  // ✅ 버튼 비활성화
-  document.querySelector("button").disabled = true;
+  downloadCSV(answers, name, studentId);
 
-  try {
-    const res = await fetch(API_URL, {
-      method: "POST",
-      body: JSON.stringify({ answers }),
-    });
-
-    const data = await res.json();
-
-    if (data.success) {
-      localStorage.setItem("submitted", "true");
-      document.body.innerHTML = "<h2>✅ 설문이 완료되었습니다. 감사합니다.</h2>";
-    } else {
-      alert("저장 실패");
-      document.querySelector("button").disabled = false;
-    }
-
-  } catch (err) {
-    alert("서버 오류");
-    document.querySelector("button").disabled = false;
-  }
+  alert("✅ 저장 완료 (CSV 다운로드됨)");
 }
 
-// 초기 카운터
+// 초기 실행
 updateCounter();
+loadQuestions();
 </script>
 
 </body>
