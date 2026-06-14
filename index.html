@@ -146,6 +146,12 @@ function downloadCSV(answers, name, studentId) {
 // ✅ 제출
 async function submitForm() {
 
+  // ✅ 1회 제한
+  if (localStorage.getItem("submitted")) {
+    alert("이미 설문에 참여하셨습니다.");
+    return;
+  }
+
   const name = document.getElementById("username").value.trim();
   const studentId = document.getElementById("studentId").value.trim();
 
@@ -185,6 +191,8 @@ async function submitForm() {
     const data = await res.json();
 
     if (data.success) {
+      localStorage.setItem("submitted", "true"); // ✅ 저장
+      document.querySelector("button").disabled = true; // ✅ 버튼 잠금
       alert("✅ 제출 완료 (구글시트 저장됨)");
     } else {
       alert("저장 실패");
